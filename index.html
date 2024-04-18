@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reichman's Chase</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            height: 100vh;
+            background: url('./images/background2.jpg') no-repeat center center fixed;
+            background-size: cover;
+        }
+
+        .party-background {
+            background: url('./images/party.jpg') no-repeat center center fixed;
+            background-size: cover;
+        }
+
+        .graduation-background {
+            background: url('./images/graduation.png') no-repeat center center fixed;
+            background-size: cover;
+        }
+
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.229); 
+            z-index: -1;
+        }
+
+        canvas {
+            display: block;
+            margin: auto;
+        }
+
+        @font-face {
+            font-family: "Blomberg";
+            src: url("./fonts/Blomberg.otf") format("opentype");
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+
+     <!-- GameAnalytics -->
+     <script>
+        (function(w,d,a,m){var s='script';var g='GameAnalytics';w[g]=w[g]||function(){(w[g].q=w[g].q||[]).push(arguments)},a=d.createElement(s),m=d.getElementsByTagName(s)[0];a.async=1;a.src='http://download.gameanalytics.com/js/GameAnalytics-4.0.9.min.js';m.parentNode.insertBefore(a,m)})(window,document);
+    
+        GameAnalytics("setEnabledInfoLog", true);
+        GameAnalytics("initialize", "bb54c8551c210f9fd5c2e2cbb4a861e1", "3ef010f5e6d3d3b3710922be6526c00e5aeb495c");
+    </script>
+    <!-- End GameAnalytics -->
+
+    <audio id="backgroundMusic" loop>
+        <source src="./audio/background_music.mp3" type="audio/mp3">
+    </audio>
+
+    <audio id="hitSound" >
+        <source src="./audio/ouch.mp3" type="audio/mp3">
+    </audio>
+
+    <audio id="deanSound" >
+        <source src="./audio/yofi.mp3" type="audio/mp3">
+    </audio>
+
+    <audio id="partySound" >
+        <source src="./audio/party.mp3" type="audio/mp3">
+    </audio>
+
+    <audio id="clappingSound" >
+        <source src="./audio/clapping.mp3" type="audio/mp3">
+    </audio>
+
+    <script>
+        const clappingSound = document.getElementById("clappingSound");
+        clappingSound.load();
+        const hitSound = document.getElementById("hitSound");
+        hitSound.load();
+        const deanSound = document.getElementById("deanSound");
+        deanSound.load();
+        const partyMusic = document.getElementById("partySound");
+        partyMusic.load();
+        const backgroundMusic = document.getElementById("backgroundMusic");
+        backgroundMusic.load();
+        backgroundMusic.play();
+
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Calculate the position for the Play Again button
+        const buttonWidth = 200;
+        const buttonHeight = 40;
+        const buttonX = (canvas.width - buttonWidth) / 2;
+        const buttonY = canvas.height / 2 + 60;
+
+        let score = 0;
+        let life = 3;
+        let currentSemester = 1;
+        let isProtected = false;
+        let isGameOver  = false;
+        let isLifeDecrease = false;
+        let isLevelUp = false;
+        let isTouchingBoundaries = false;
+        let isPartyMode = false;
+        let isWelcomeParty = false;
+        let isGraduation = false;
+        let showInstructions = false;
+        let obstaclesCleared = 0;
+
+        const student = {
+            x: 50,
+            y: canvas.height / 2 - 15,
+            width: 90,
+            height: 110,
+            speed: 6,
+            jumping: false,
+            jumpHeight: 20,
+            jumpCount: 0,
+        };
+
+        const studentImage = new Image();
+        studentImage.src = './images/student.png';
+
+        const reichmanImage = new Image();
+        reichmanImage.src = './images/reichman.png';
+        const reichmanWidth = 300; // Adjust the width of Reichman's image
+        const reichmanHeight = 300; // Adjust the height of Reichman's image
+        let reichmanX = canvas.width; // Initialize Reichman's X position
+        const reichmanY = canvas.height / 2 - reichmanHeight / 2; // Adjust the Y position of Reichman
+
+        const obstacles = [];
+        const obstacleWidth = 30;
+        const obstacleHeight = 30;
+
+        const obstacleImages = [
+            { src: './images/drink.png', width: 60, height: 60 },
+            { src: './images/dancing.png', width: 60, height: 60 },
+            { src: './images/disco.png', width: 60, height: 60 },
+            { src: './images/surprising.png', width: 60, height: 60 },
+        ];
+
+        const bigDiscoImage = new Image();
+        bigDiscoImage.src = './images/disco.png';
+        const bigDiscoWidth = 600;
+        const bigDiscoHeight = 600;
+        let bigDiscoX = canvas.width;
+        const bigDiscoY = 20;
+
+        const powerUps = [];
+        const powerUpWidth = 30;
+        const powerUpHeight = 30;
+
+        const powerUpImages = [
+            { src: './images/clock.png', width: 50, height: 50, effect: 'life' },
+            { src: './images/dean.png', width: 55, height: 55, effect: 'points' },
+            { src: './images/coffee.png', width: 45, height: 45, effect: 'jumpHeight' },
+            { src: './images/attent.png', width: 40, height: 45, effect: 'saver' },
+        ];
+
+        function drawStudent() {
+            if (isProtected) {
+                ctx.globalAlpha = 0.7;
+            } 
+            ctx.drawImage(studentImage, student.x, student.y, student.width, student.height);
+            ctx.globalAlpha = 1;
+        }
+
+        function drawBigDisco() {
+            ctx.drawImage(bigDiscoImage, bigDiscoX, bigDiscoY, bigDiscoWidth, bigDiscoHeight);
+        }
+
+        function drawObstacles() {
+            obstacles.forEach((obstacle) => {
+                const obstacleImage = new Image();
+                obstacleImage.src = obstacle.type.src;
+                ctx.drawImage(obstacleImage, obstacle.x, obstacle.y, obstacle.type.width, obstacle.type.height);
+            });
+        }
+
+        function drawPowerUps() {
+            powerUps.forEach((powerUp) => {
+                const powerUpImage = new Image();
+                powerUpImage.src = powerUp.type.src;
+                ctx.drawImage(powerUpImage, powerUp.x, powerUp.y, powerUp.type.width, powerUp.type.height); 
+            });
+        }
+
+        function drawHUD() {
+            ctx.fillStyle = "black";
+            ctx.font = "16px Arial";
+            ctx.fillText(`Semester: ${currentSemester}`, 10, 20);
+            ctx.fillText(`Score: ${score}`, 10, 40);
+            ctx.fillText(`life: ${life}`, 10, 60);
+        }
+
+        
+    
+        function update() {
+            if(!isPartyMode && !isGraduation) {
+                backgroundMusic.play();
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (currentSemester === 3) {
+                drawBigDisco();
+                bigDiscoX -= student.speed; // Move the big disco to the left
+            }
+
+            if (currentSemester === 1 && obstaclesCleared < 5) {
+                displayInstructions();
+            }
+
+            if(life <= 0) {
+                displayGameOver();
+                return;
+            }
+
+            if (showInstructions) {
+                ctx.fillStyle = "black";
+                ctx.font = "20px Blomberg";
+                const instructionText = "Press space to jump | don't touch the ground";
+                const textWidth = ctx.measureText(instructionText).width;
+                ctx.fillText(instructionText, (canvas.width - textWidth) / 2, canvas.height - 20);
+            }
+
+            if (isLifeDecrease || isLevelUp) {
+                const text = isLifeDecrease ? "-♥" : `semester ${currentSemester} !`;
+                const fontSize = isLifeDecrease ? 50 : 40;
+                
+                ctx.fillStyle = "black";
+                ctx.font = `${fontSize}px Blomberg`;
+                
+                const textWidth = ctx.measureText(text).width;
+                const textHeight = fontSize; // Approximate height based on font size
+                
+                const textX = (canvas.width - textWidth) / 2;
+                const textY = (canvas.height - textHeight) / 2;
+                
+                ctx.fillText(text, textX, textY);
+            }
+
+            if (isWelcomeParty) {
+                ctx.fillStyle = "black";
+                ctx.font = "30px Blomberg";
+                textWidth = ctx.measureText("Welcome to Eilat IDC!").width;
+                ctx.fillText("Welcome to Eilat IDC!", (canvas.width - textWidth) / 2, canvas.height / 2 + 20);
+            }
+
+            if (obstaclesCleared >= 10 && currentSemester <= 9) {
+                currentSemester++;
+                displayLevelUp();
+                student.speed += 0.4;
+                obstaclesCleared = 0; 
+            } 
+            else if (currentSemester > 9) {
+                // Display Reichman's picture
+                ctx.drawImage(reichmanImage, reichmanX, reichmanY, reichmanWidth, reichmanHeight);
+                reichmanX -= student.speed; // Move Reichman to the left
+            }
+         
+            // Update student position
+            if (student.jumping) {
+                if (student.y > 0) {  // Prevent going above the canvas top
+                    student.y -= student.speed;
+                    student.jumpCount++;
+
+                    if (student.jumpCount > student.jumpHeight) {
+                        student.jumping = false;
+                        student.jumpCount = 0;
+                    }
+                } else {
+                    student.jumping = false; // Reset jumping if the student hits the top
+                    student.jumpCount = 0;
+                }
+            } else if (student.y < canvas.height - student.height) {
+                student.y += 5;
+            }
+
+            // Check for collision with obstacles
+            obstacles.forEach((obstacle, index) => {
+                if (
+                    student.x < obstacle.x + obstacleWidth &&
+                    student.x + student.width > obstacle.x &&
+                    student.y < obstacle.y + obstacleHeight &&
+                    student.y + student.height > obstacle.y
+                ) {
+                    obstacles.splice(index, 1); //remove the obstacle
+                    if (!isPartyMode) {
+                        if (!isProtected) {
+                            hitSound.play();
+                            life--;
+                            displayLifeDecrease();
+                        }   
+                    } else { //if we are in party mode
+                        score += 100;
+                    } 
+                }
+
+                // Check if an obstacle is cleared and increment the count
+                obstacles.forEach((obstacle) => {
+                    if (student.x + student.width > obstacle.x + obstacleWidth && !obstacle.cleared) {
+                        obstacle.cleared = true;
+                        score += 10; // Increase score when an obstacle is cleared
+                        obstaclesCleared++; // Increment the count
+                    }
+                });
+
+                // Remove obstacles that go off-screen
+                if (obstacle.x + obstacleWidth < 0) {
+                    obstacles.splice(index, 1);
+                }
+            });
+   
+            // Check for collision with powerUps
+            powerUps.forEach((powerUp, index) => {
+                if (
+                    student.x < powerUp.x + powerUpWidth &&
+                    student.x + student.width > powerUp.x &&
+                    student.y < powerUp.y + powerUpHeight &&
+                    student.y + student.height > powerUp.y
+                ) {
+                    powerUps.splice(index, 1);
+                    if (!isPartyMode) {
+                        applyPowerUpEffect(powerUp.type.effect);
+                    } else { //if we are in party mode
+                        hitSound.play();
+                        life--;
+                        displayLifeDecrease();
+                    }    
+                }
+            });
+            
+            // Check for collision with bottom boundaries
+            if (student.y >= canvas.height - student.height) {
+                if (!isTouchingBoundaries && !isProtected) {
+                    life--;
+                    hitSound.play();
+                    displayTouchingBoundaries();
+                    displayLifeDecrease();
+                }
+            }
+
+            // Check for collision with the big disco
+            if (
+                student.x < bigDiscoX + bigDiscoWidth &&
+                student.x + student.width > bigDiscoX &&
+                student.y < bigDiscoY + bigDiscoHeight &&
+                student.y + student.height > bigDiscoY
+            ) {
+                displayPartyMode();
+            }
+            
+            if (
+                student.x < reichmanX + reichmanWidth &&
+                student.x + student.width > reichmanX &&
+                student.y < reichmanY + reichmanHeight &&
+                student.y + student.height > reichmanY
+            ) {
+                reichmanX = -reichmanWidth;  // Move reichman off-screen
+                if (!isGraduation) {
+                    displayGraduation();
+                    return;
+                }       
+            }
+
+            // Generate new obstacles randomly
+            let conditionNumber = currentSemester <= 4 ? 0.01 : 0.004;
+            if (Math.random() < (conditionNumber * currentSemester)) {
+                const newObstacle = { 
+                    x: canvas.width,
+                    y: Math.random() * (canvas.height - obstacleHeight),
+                    type: getRandomObstacleType(),
+                    cleared: false,
+                };
+                obstacles.push(newObstacle);
+            }
+
+            // Generate new powerUps randomly
+            if (Math.random() < 0.003) {
+                const newPowerUp = {
+                    x: canvas.width,
+                    y: Math.random() * (canvas.height - powerUpHeight),
+                    type: getRandomPowerUpType(),
+                };
+                powerUps.push(newPowerUp);
+            }
+
+            // Draw objects
+            drawStudent();
+            drawObstacles();
+            drawPowerUps();
+            drawHUD(); 
+
+            // Move the obstacles to the left
+            obstacles.forEach((obstacle) => {
+                obstacle.x -= student.speed;
+            });
+
+            // Move the powerUps to the left
+            powerUps.forEach((powerUp) => {
+                powerUp.x -= student.speed;
+            }); 
+
+            // Draw the next frame
+            requestAnimationFrame(update);
+        }
+
+        function displayLevelUp() {
+            isLevelUp = true;
+            setTimeout(() => {
+                isLevelUp = false;
+            }, 3000); 
+        }
+
+        function displayPartyMode() {
+            activateWelcomeText(); //welcome to party text
+            isPartyMode = true;
+            backgroundMusic.pause(); // Pause the background music
+            if (!isGraduation) {
+                partyMusic.play(); 
+            }
+
+            bigDiscoX = -bigDiscoWidth;  // Move the big disco off-screen
+            document.body.classList.add('party-background'); // Add party mode background
+            setTimeout(() => {
+                isPartyMode = false;
+                partyMusic.pause(); // Pause the party music
+                document.body.classList.remove('party-background'); // Remove party mode background
+                backgroundMusic.play();
+            }, 15000);   
+        }
+
+        function displayLifeDecrease() {
+            isLifeDecrease = true;
+            setTimeout(() => {
+                isLifeDecrease = false;
+            }, 3000); 
+        }
+
+        function displayInstructions() {
+            showInstructions = true;
+            setTimeout(() => {
+                showInstructions = false;
+            }, 5000);
+        }
+
+        function displayTouchingBoundaries() {
+            isTouchingBoundaries = true;
+            setTimeout(() => {
+                isTouchingBoundaries = false;
+            }, 3000); 
+        }
+
+        function activateJumpHeight() {
+            student.jumpHeight++;
+            setTimeout(() => {
+                student.jumpHeight--;
+            }, 10000); 
+        }
+
+        function activateProtection() {
+            isProtected = true;
+            setTimeout(() => {
+                isProtected = false; // Disable protection after 10 seconds
+            }, 10000); 
+        }
+
+        function activateWelcomeText() {
+            isWelcomeParty = true;
+            setTimeout(() => {
+                isWelcomeParty = false; 
+            }, 3000); 
+        }
+
+        function displayGraduation() {
+            isGraduation = true;
+            canvas.style.cursor = "default";
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear the canvas
+            document.body.classList.add('graduation-background');
+            backgroundMusic.pause();
+            clappingSound.play();
+
+            // Display graduation message
+            ctx.fillStyle = "black";
+            ctx.font = "60px Blomberg";
+            let textWidth = ctx.measureText("B.A").width;
+            ctx.fillText("B.A", (canvas.width - textWidth) / 2, canvas.height / 2 - 40);
+
+            ctx.font = "50px Blomberg";
+            textWidth = ctx.measureText("Reichman's Chase").width;
+            ctx.fillText("Reichman's Chase", (canvas.width - textWidth) / 2, canvas.height / 2 );
+
+            ctx.font = "30px Blomberg";
+            textWidth = ctx.measureText("Your grade: " + score).width;
+            ctx.fillText("Your grade: " + score, (canvas.width - textWidth) / 2, canvas.height / 2 + 30);
+
+            // Draw Play Again button on canvas
+            ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+
+            // Draw "Play Again" text
+            ctx.fillStyle = "white";
+            ctx.font = "20px Blomberg";
+            textWidth = ctx.measureText("Play Again").width;
+            ctx.fillText("Play Again", buttonX + (buttonWidth - textWidth) / 2, buttonY + buttonHeight / 2 + 10);
+          
+        }
+
+        function displayGameOver() {
+            isGameOver = true;
+            canvas.style.cursor = "default";
+            
+            // Clear the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = "black";
+            ctx.font = "60px Blomberg";
+            let textWidth = ctx.measureText("Game Over!").width;
+            ctx.fillText("Game Over!", (canvas.width - textWidth) / 2, canvas.height / 2 - 20);
+
+            ctx.font = "30px Blomberg";
+            textWidth = ctx.measureText("Your score: " + score).width;
+            ctx.fillText("Your score: " + score, (canvas.width - textWidth) / 2, canvas.height / 2 + 20);
+            
+
+            // Draw Play Again button on canvas
+            ctx.fillStyle = "black";
+            ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+
+            // Draw "Play Again" text
+            ctx.fillStyle = "white";
+            ctx.font = "20px Blomberg";
+            textWidth = ctx.measureText("Play Again").width;
+            // Centering horizontally
+            ctx.fillText("Play Again", buttonX + (buttonWidth - textWidth) / 2, buttonY + buttonHeight / 2 + 10);
+        }
+
+        function resetGame() {
+            // Remove event listeners
+            // document.removeEventListener("keydown", jumpEventListener);
+            // canvas.removeEventListener("click", clickEventListener);
+
+            document.body.classList.remove('graduation-background');
+            canvas.style.cursor = "default";
+            bigDiscoX = canvas.width;
+            life = 3;
+            score = 0;
+            currentSemester = 1;
+            isProtected = false;
+            isGameOver = false;
+            isLifeDecrease = false;
+            isTouchingBoundaries = false;
+            isLevelUp = false;
+            isPartyMode = false;
+            isWelcomeParty = false;
+            isGraduation = false;
+            showInstructions = false;
+            obstaclesCleared = 0;
+            student.x = 50;
+            student.y = canvas.height / 2 - 15;
+            student.speed = 6;
+            student.jumpHeight = 20; 
+            obstacles.length = 0;
+            powerUps.length = 0;
+            
+            requestAnimationFrame(update); 
+            backgroundMusic.play(); 
+        }
+
+        function getRandomObstacleType() {
+            const randomIndex = Math.floor(Math.random() * obstacleImages.length);
+            return obstacleImages[randomIndex];
+        }
+
+        function getRandomPowerUpType() {
+            const randomIndex = Math.floor(Math.random() * powerUpImages.length);
+            return powerUpImages[randomIndex];
+        }
+
+        function applyPowerUpEffect(effect) {
+            if (effect === 'life') {
+                life += 1;
+            } else if (effect === 'points') {
+                deanSound.play();
+                score += 100; 
+            } else if (effect === 'jumpHeight') {
+                activateJumpHeight();
+            } else if (effect === 'saver') {
+                activateProtection();
+            } 
+        }   
+
+        // Event listener for jumping
+        function jumpEventListener(event) {
+            if (event.code === "Space" && !student.jumping) {
+                student.jumping = true;
+            }
+        }
+
+        // Event listener for clicking
+        function clickEventListener(event) {
+            // Get the canvas position relative to the viewport
+            const canvasRect = canvas.getBoundingClientRect();
+
+            // Calculate the click coordinates relative to the canvas
+            const clickX = event.clientX - canvasRect.left;
+            const clickY = event.clientY - canvasRect.top;
+
+            // Check if the game is over or if the student graduated and if the click is within the Play Again button area
+            if ((isGameOver || isGraduation) &&
+                clickX >= buttonX &&
+                clickX <= buttonX + buttonWidth &&
+                clickY >= buttonY &&
+                clickY <= buttonY + buttonHeight
+            ) {
+                resetGame();
+                return;
+            }
+        }
+
+        // Add event listeners
+        document.addEventListener("keydown", jumpEventListener);
+        canvas.addEventListener("click", clickEventListener);
+
+        // Start the game loop
+        update();
+    </script>
+</body>
+</html>
