@@ -1,1 +1,3 @@
-# Reichman-s-Chase
+# Description
+Reichman's Chase is an endless runner game designed to help students navigate the challenges of the academic semester. The players control a student character who is determined to avoid distractions like parties, alcohol, and music in order to successfully complete the semester. Instead, they must focus on catching beneficial items such as the dean and clocks to enhance their academic progress.
+To add an unexpected twist, The game features a party mode that activates during gameplay. When party mode is activated, the once "good" items become obstacles, and the player must quickly adapt their strategy to avoid them while still striving for success.
